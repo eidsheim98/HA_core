@@ -1,12 +1,15 @@
 """Support for Google Calendar Search binary sensors."""
+
 from __future__ import annotations
 
 import copy
-from datetime import date, datetime, timedelta
+from datetime import datetime, timedelta
 import logging
 from typing import Any
 
-from httplib2 import ServerNotFoundError
+from gcal_sync.api import GoogleCalendarService, ListEventsRequest
+from gcal_sync.exceptions import ApiException
+from gcal_sync.model import Event
 
 from homeassistant.components.calendar import (
     ENTITY_ID_FORMAT,
@@ -17,25 +20,24 @@ from homeassistant.components.calendar import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_DEVICE_ID, CONF_ENTITIES, CONF_NAME, CONF_OFFSET
-from homeassistant.core import HomeAssistant, callback
-from homeassistant.exceptions import HomeAssistantError, PlatformNotReady
-from homeassistant.helpers.dispatcher import async_dispatcher_connect
+from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import PlatformNotReady
 from homeassistant.helpers.entity import generate_entity_id
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.util import Throttle, dt
+from homeassistant.util import Throttle
 
 from . import (
-    CONF_CAL_ID,
     CONF_IGNORE_AVAILABILITY,
     CONF_SEARCH,
     CONF_TRACK,
     DATA_SERVICE,
     DEFAULT_CONF_OFFSET,
     DOMAIN,
-    SERVICE_SCAN_CALENDARS,
+    YAML_DEVICES,
+    get_calendar_info,
+    load_config,
+    update_config,
 )
-from .api import GoogleCalendarService
-from .const import DISCOVER_CALENDAR
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -57,49 +59,62 @@ async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
     """Set up the google calendar platform."""
-
-    @callback
-    def async_discover(discovery_info: dict[str, Any]) -> None:
-        _async_setup_entities(
-            hass,
-            entry,
-            async_add_entities,
-            discovery_info,
-        )
-
-    entry.async_on_unload(
-        async_dispatcher_connect(hass, DISCOVER_CALENDAR, async_discover)
-    )
-
-    # Look for any new calendars
+    calendar_service = hass.data[DOMAIN][DATA_SERVICE]
     try:
-        await hass.services.async_call(DOMAIN, SERVICE_SCAN_CALENDARS, blocking=True)
-    except HomeAssistantError as err:
-        # This can happen if there's a connection error during setup.
+        result = await calendar_service.async_list_calendars()
+    except ApiException as err:
         raise PlatformNotReady(str(err)) from err
 
-
-@callback
-def _async_setup_entities(
-    hass: HomeAssistant,
-    entry: ConfigEntry,
-    async_add_entities: AddEntitiesCallback,
-    disc_info: dict[str, Any],
-) -> None:
-    calendar_service = hass.data[DOMAIN][DATA_SERVICE]
+    # Yaml configuration may override objects from the API
+    calendars = await hass.async_add_executor_job(
+        load_config, hass.config.path(YAML_DEVICES)
+    )
+    new_calendars = []
     entities = []
-    for data in disc_info[CONF_ENTITIES]:
-        if not data[CONF_TRACK]:
-            continue
-        entity_id = generate_entity_id(
-            ENTITY_ID_FORMAT, data[CONF_DEVICE_ID], hass=hass
-        )
-        entity = GoogleCalendarEntity(
-            calendar_service, disc_info[CONF_CAL_ID], data, entity_id
-        )
-        entities.append(entity)
+    for calendar_item in result.items:
+        calendar_id = calendar_item.id
+        if calendars and calendar_id in calendars:
+            calendar_info = calendars[calendar_id]
+        else:
+            calendar_info = get_calendar_info(
+                hass, calendar_item.dict(exclude_unset=True)
+            )
+            new_calendars.append(calendar_info)
+
+        # Yaml calendar config may map one calendar to multiple entities with extra options like
+        # offsets or search criteria.
+        num_entities = len(calendar_info[CONF_ENTITIES])
+        for data in calendar_info[CONF_ENTITIES]:
+            entity_enabled = data.get(CONF_TRACK, True)
+            if not entity_enabled:
+                _LOGGER.warning(
+                    "The 'track' option in google_calendars.yaml has been deprecated. The setting "
+                    "has been imported to the UI, and should now be removed from google_calendars.yaml"
+                )
+            entity_name = data[CONF_DEVICE_ID]
+            entities.append(
+                GoogleCalendarEntity(
+                    calendar_service,
+                    calendar_id,
+                    data,
+                    generate_entity_id(ENTITY_ID_FORMAT, entity_name, hass=hass),
+                    # The google_calendars.yaml file lets users add multiple entities for
+                    # the same calendar id and needs additional disambiguation
+                    f"{calendar_id}-{entity_name}" if num_entities > 1 else calendar_id,
+                    entity_enabled,
+                )
+            )
 
     async_add_entities(entities, True)
+
+    if calendars and new_calendars:
+
+        def append_calendars_to_config() -> None:
+            path = hass.config.path(YAML_DEVICES)
+            for calendar in new_calendars:
+                update_config(path, calendar)
+
+        await hass.async_add_executor_job(append_calendars_to_config)
 
 
 class GoogleCalendarEntity(CalendarEntity):
@@ -111,6 +126,8 @@ class GoogleCalendarEntity(CalendarEntity):
         calendar_id: str,
         data: dict[str, Any],
         entity_id: str,
+        unique_id: str,
+        entity_enabled: bool,
     ) -> None:
         """Create the Calendar event device."""
         self._calendar_service = calendar_service
@@ -122,6 +139,8 @@ class GoogleCalendarEntity(CalendarEntity):
         self._offset = data.get(CONF_OFFSET, DEFAULT_CONF_OFFSET)
         self._offset_value: timedelta | None = None
         self.entity_id = entity_id
+        self._attr_unique_id = unique_id
+        self._attr_entity_registry_enabled_default = entity_enabled
 
     @property
     def extra_state_attributes(self) -> dict[str, bool]:
@@ -147,77 +166,63 @@ class GoogleCalendarEntity(CalendarEntity):
         """Return the name of the entity."""
         return self._name
 
-    def _event_filter(self, event: dict[str, Any]) -> bool:
+    def _event_filter(self, event: Event) -> bool:
         """Return True if the event is visible."""
         if self._ignore_availability:
             return True
-        return event.get(TRANSPARENCY, OPAQUE) == OPAQUE
+        return event.transparency == OPAQUE  # type: ignore[no-any-return]
 
     async def async_get_events(
         self, hass: HomeAssistant, start_date: datetime, end_date: datetime
     ) -> list[CalendarEvent]:
         """Get all events in a specific time frame."""
-        event_list: list[dict[str, Any]] = []
-        page_token: str | None = None
-        while True:
-            try:
-                items, page_token = await self._calendar_service.async_list_events(
-                    self._calendar_id,
-                    start_time=start_date,
-                    end_time=end_date,
-                    search=self._search,
-                    page_token=page_token,
-                )
-            except ServerNotFoundError as err:
-                _LOGGER.error("Unable to connect to Google: %s", err)
-                return []
 
-            event_list.extend(filter(self._event_filter, items))
-            if not page_token:
-                break
-
-        return [_get_calendar_event(event) for event in event_list]
+        request = ListEventsRequest(
+            calendar_id=self._calendar_id,
+            start_time=start_date,
+            end_time=end_date,
+            search=self._search,
+        )
+        result_items = []
+        try:
+            result = await self._calendar_service.async_list_events(request)
+            async for result_page in result:
+                result_items.extend(result_page.items)
+        except ApiException as err:
+            _LOGGER.error("Unable to connect to Google: %s", err)
+            return []
+        return [
+            _get_calendar_event(event)
+            for event in filter(self._event_filter, result_items)
+        ]
 
     @Throttle(MIN_TIME_BETWEEN_UPDATES)
     async def async_update(self) -> None:
         """Get the latest data."""
+        request = ListEventsRequest(calendar_id=self._calendar_id, search=self._search)
         try:
-            items, _ = await self._calendar_service.async_list_events(
-                self._calendar_id, search=self._search
-            )
-        except ServerNotFoundError as err:
+            result = await self._calendar_service.async_list_events(request)
+        except ApiException as err:
             _LOGGER.error("Unable to connect to Google: %s", err)
             return
 
         # Pick the first visible event and apply offset calculations.
-        valid_items = filter(self._event_filter, items)
+        valid_items = filter(self._event_filter, result.items)
         event = copy.deepcopy(next(valid_items, None))
         if event:
-            (summary, offset) = extract_offset(event.get("summary", ""), self._offset)
-            event["summary"] = summary
+            (event.summary, offset) = extract_offset(event.summary, self._offset)
             self._event = _get_calendar_event(event)
             self._offset_value = offset
         else:
             self._event = None
 
 
-def _get_date_or_datetime(date_dict: dict[str, str]) -> datetime | date:
-    """Convert a google calendar API response to a datetime or date object."""
-    if "date" in date_dict:
-        parsed_date = dt.parse_date(date_dict["date"])
-        assert parsed_date
-        return parsed_date
-    parsed_datetime = dt.parse_datetime(date_dict["dateTime"])
-    assert parsed_datetime
-    return parsed_datetime
-
-
-def _get_calendar_event(event: dict[str, Any]) -> CalendarEvent:
+def _get_calendar_event(event: Event) -> CalendarEvent:
     """Return a CalendarEvent from an API event."""
     return CalendarEvent(
-        summary=event["summary"],
-        start=_get_date_or_datetime(event["start"]),
-        end=_get_date_or_datetime(event["end"]),
-        description=event.get("description"),
-        location=event.get("location"),
+        summary=event.summary,
+        start=event.start.value,
+        end=event.end.value,
+        description=event.description,
+        location=event.location,
     )
