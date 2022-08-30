@@ -1,18 +1,28 @@
 """UniFi Protect Integration utils."""
 from __future__ import annotations
 
-from collections.abc import Generator, Iterable
 import contextlib
 from enum import Enum
+import re
 import socket
 from typing import Any
 
-from pyunifiprotect import ProtectApiClient
-from pyunifiprotect.data.base import ProtectAdoptableDeviceModel, ProtectDeviceModel
+from pyunifiprotect.data import (
+    Bootstrap,
+    Light,
+    LightModeEnableType,
+    LightModeType,
+    ProtectAdoptableDeviceModel,
+)
+import voluptuous as vol
 
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import config_validation as cv
 
-from .const import ModelType
+from .const import DOMAIN, ModelType
+
+MAC_RE = re.compile(r"[0-9A-F]{12}")
 
 
 def get_nested_attr(obj: Any, attr: str) -> Any:
@@ -32,15 +42,16 @@ def get_nested_attr(obj: Any, attr: str) -> Any:
 
 
 @callback
-def _async_unifi_mac_from_hass(mac: str) -> str:
+def async_unifi_mac(mac: str) -> str:
+    """Convert MAC address to format from UniFi Protect."""
     # MAC addresses in UFP are always caps
-    return mac.replace(":", "").upper()
+    return mac.replace(":", "").replace("-", "").replace("_", "").upper()
 
 
 @callback
-def _async_short_mac(mac: str) -> str:
+def async_short_mac(mac: str) -> str:
     """Get the short mac address from the full mac."""
-    return _async_unifi_mac_from_hass(mac)[-6:]
+    return async_unifi_mac(mac)[-6:]
 
 
 async def _async_resolve(hass: HomeAssistant, host: str) -> str | None:
@@ -59,33 +70,51 @@ async def _async_resolve(hass: HomeAssistant, host: str) -> str | None:
     return None
 
 
+@callback
 def async_get_devices_by_type(
-    api: ProtectApiClient, device_type: ModelType
-) -> dict[str, ProtectDeviceModel]:
-    """Get devices by type."""
-    devices: dict[str, ProtectDeviceModel] = getattr(
-        api.bootstrap, f"{device_type.value}s"
-    )
-    return devices
-
-
-def async_get_adoptable_devices_by_type(
-    api: ProtectApiClient, device_type: ModelType
+    bootstrap: Bootstrap, device_type: ModelType
 ) -> dict[str, ProtectAdoptableDeviceModel]:
-    """Get adoptable devices by type."""
+    """Get devices by type."""
+
     devices: dict[str, ProtectAdoptableDeviceModel] = getattr(
-        api.bootstrap, f"{device_type.value}s"
+        bootstrap, f"{device_type.value}s"
     )
     return devices
 
 
 @callback
-def async_get_devices(
-    api: ProtectApiClient, model_type: Iterable[ModelType]
-) -> Generator[ProtectDeviceModel, None, None]:
-    """Return all device by type."""
-    return (
-        device
-        for device_type in model_type
-        for device in async_get_devices_by_type(api, device_type).values()
-    )
+def async_get_light_motion_current(obj: Light) -> str:
+    """Get light motion mode for Flood Light."""
+
+    if (
+        obj.light_mode_settings.mode == LightModeType.MOTION
+        and obj.light_mode_settings.enable_at == LightModeEnableType.DARK
+    ):
+        return f"{LightModeType.MOTION.value}Dark"
+    return obj.light_mode_settings.mode.value
+
+
+@callback
+def async_dispatch_id(entry: ConfigEntry, dispatch: str) -> str:
+    """Generate entry specific dispatch ID."""
+
+    return f"{DOMAIN}.{entry.entry_id}.{dispatch}"
+
+
+@callback
+def convert_mac_list(option: str, raise_exception: bool = False) -> set[str]:
+    """Convert csv list of MAC addresses."""
+
+    macs = set()
+    values = cv.ensure_list_csv(option)
+    for value in values:
+        if value == "":
+            continue
+        value = async_unifi_mac(value)
+        if not MAC_RE.match(value):
+            if raise_exception:
+                raise vol.Invalid("invalid_mac_list")
+            continue
+        macs.add(value)
+
+    return macs

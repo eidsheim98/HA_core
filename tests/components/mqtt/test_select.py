@@ -13,7 +13,12 @@ from homeassistant.components.select import (
     DOMAIN as SELECT_DOMAIN,
     SERVICE_SELECT_OPTION,
 )
-from homeassistant.const import ATTR_ASSUMED_STATE, ATTR_ENTITY_ID, STATE_UNKNOWN
+from homeassistant.const import (
+    ATTR_ASSUMED_STATE,
+    ATTR_ENTITY_ID,
+    STATE_UNKNOWN,
+    Platform,
+)
 import homeassistant.core as ha
 from homeassistant.setup import async_setup_component
 
@@ -43,11 +48,12 @@ from .test_common import (
     help_test_setting_blocked_attribute_via_mqtt_json_message,
     help_test_setup_manual_entity_from_yaml,
     help_test_unique_id,
+    help_test_unload_config_entry_with_platform,
     help_test_update_with_json_attrs_bad_JSON,
     help_test_update_with_json_attrs_not_dict,
 )
 
-from tests.common import async_fire_mqtt_message
+from tests.common import async_fire_mqtt_message, mock_restore_cache
 
 DEFAULT_CONFIG = {
     select.DOMAIN: {
@@ -57,6 +63,13 @@ DEFAULT_CONFIG = {
         "options": ["milk", "beer"],
     }
 }
+
+
+@pytest.fixture(autouse=True)
+def select_platform_only():
+    """Only setup the select platform to speed up tests."""
+    with patch("homeassistant.components.mqtt.PLATFORMS", [Platform.SELECT]):
+        yield
 
 
 async def test_run_select_setup(hass, mqtt_mock_entry_with_yaml_config):
@@ -139,26 +152,23 @@ async def test_run_select_service_optimistic(hass, mqtt_mock_entry_with_yaml_con
     """Test that set_value service works in optimistic mode."""
     topic = "test/select"
 
-    fake_state = ha.State("select.test", "milk")
+    fake_state = ha.State("select.test_select", "milk")
+    mock_restore_cache(hass, (fake_state,))
 
-    with patch(
-        "homeassistant.helpers.restore_state.RestoreEntity.async_get_last_state",
-        return_value=fake_state,
-    ):
-        assert await async_setup_component(
-            hass,
-            select.DOMAIN,
-            {
-                "select": {
-                    "platform": "mqtt",
-                    "command_topic": topic,
-                    "name": "Test Select",
-                    "options": ["milk", "beer"],
-                }
-            },
-        )
-        await hass.async_block_till_done()
-        mqtt_mock = await mqtt_mock_entry_with_yaml_config()
+    assert await async_setup_component(
+        hass,
+        select.DOMAIN,
+        {
+            "select": {
+                "platform": "mqtt",
+                "command_topic": topic,
+                "name": "Test Select",
+                "options": ["milk", "beer"],
+            }
+        },
+    )
+    await hass.async_block_till_done()
+    mqtt_mock = await mqtt_mock_entry_with_yaml_config()
 
     state = hass.states.get("select.test_select")
     assert state.state == "milk"
@@ -183,27 +193,24 @@ async def test_run_select_service_optimistic_with_command_template(
     """Test that set_value service works in optimistic mode and with a command_template."""
     topic = "test/select"
 
-    fake_state = ha.State("select.test", "milk")
+    fake_state = ha.State("select.test_select", "milk")
+    mock_restore_cache(hass, (fake_state,))
 
-    with patch(
-        "homeassistant.helpers.restore_state.RestoreEntity.async_get_last_state",
-        return_value=fake_state,
-    ):
-        assert await async_setup_component(
-            hass,
-            select.DOMAIN,
-            {
-                "select": {
-                    "platform": "mqtt",
-                    "command_topic": topic,
-                    "name": "Test Select",
-                    "options": ["milk", "beer"],
-                    "command_template": '{"option": "{{ value }}"}',
-                }
-            },
-        )
-        await hass.async_block_till_done()
-        mqtt_mock = await mqtt_mock_entry_with_yaml_config()
+    assert await async_setup_component(
+        hass,
+        select.DOMAIN,
+        {
+            "select": {
+                "platform": "mqtt",
+                "command_topic": topic,
+                "name": "Test Select",
+                "options": ["milk", "beer"],
+                "command_template": '{"option": "{{ value }}"}',
+            }
+        },
+    )
+    await hass.async_block_till_done()
+    mqtt_mock = await mqtt_mock_entry_with_yaml_config()
 
     state = hass.states.get("select.test_select")
     assert state.state == "milk"
@@ -667,13 +674,20 @@ async def test_encoding_subscribable_topics(
     )
 
 
-async def test_setup_manual_entity_from_yaml(hass, caplog, tmp_path):
+async def test_setup_manual_entity_from_yaml(hass):
     """Test setup manual configured MQTT entity."""
     platform = select.DOMAIN
     config = copy.deepcopy(DEFAULT_CONFIG[platform])
     config["name"] = "test"
     del config["platform"]
-    await help_test_setup_manual_entity_from_yaml(
-        hass, caplog, tmp_path, platform, config
-    )
+    await help_test_setup_manual_entity_from_yaml(hass, platform, config)
     assert hass.states.get(f"{platform}.test") is not None
+
+
+async def test_unload_entry(hass, mqtt_mock_entry_with_yaml_config, tmp_path):
+    """Test unloading the config entry."""
+    domain = select.DOMAIN
+    config = DEFAULT_CONFIG[domain]
+    await help_test_unload_config_entry_with_platform(
+        hass, mqtt_mock_entry_with_yaml_config, tmp_path, domain, config
+    )
