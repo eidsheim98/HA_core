@@ -5,6 +5,7 @@ import pytest
 
 from homeassistant.components.energy import data, is_configured
 from homeassistant.components.recorder.statistics import async_add_external_statistics
+from homeassistant.core import HomeAssistant
 from homeassistant.setup import async_setup_component
 from homeassistant.util import dt as dt_util
 
@@ -13,10 +14,11 @@ from tests.components.recorder.common import (
     async_recorder_block_till_done,
     async_wait_recording_done,
 )
+from tests.typing import WebSocketGenerator
 
 
 @pytest.fixture(autouse=True)
-async def setup_integration(hass, recorder_mock):
+async def setup_integration(recorder_mock, hass):
     """Set up the integration."""
     assert await async_setup_component(hass, "energy", {})
 
@@ -41,7 +43,9 @@ def mock_energy_platform(hass):
     )
 
 
-async def test_get_preferences_no_data(hass, hass_ws_client) -> None:
+async def test_get_preferences_no_data(
+    hass: HomeAssistant, hass_ws_client: WebSocketGenerator
+) -> None:
     """Test we get error if no preferences set."""
     client = await hass_ws_client(hass)
 
@@ -97,14 +101,12 @@ async def test_save_preferences(
                     {
                         "stat_energy_from": "sensor.heat_pump_meter",
                         "stat_cost": "heat_pump_kwh_cost",
-                        "entity_energy_from": None,
                         "entity_energy_price": None,
                         "number_energy_price": None,
                     },
                     {
                         "stat_energy_from": "sensor.heat_pump_meter_2",
                         "stat_cost": None,
-                        "entity_energy_from": "sensor.heat_pump_meter_2",
                         "entity_energy_price": None,
                         "number_energy_price": 0.20,
                     },
@@ -113,14 +115,12 @@ async def test_save_preferences(
                     {
                         "stat_energy_to": "sensor.return_to_grid_peak",
                         "stat_compensation": None,
-                        "entity_energy_to": None,
                         "entity_energy_price": None,
                         "number_energy_price": None,
                     },
                     {
                         "stat_energy_to": "sensor.return_to_grid_offpeak",
                         "stat_compensation": None,
-                        "entity_energy_to": "sensor.return_to_grid_offpeak",
                         "entity_energy_price": None,
                         "number_energy_price": 0.20,
                     },
@@ -167,7 +167,9 @@ async def test_save_preferences(
     assert msg["result"] == {
         "cost_sensors": {
             "sensor.heat_pump_meter_2": "sensor.heat_pump_meter_2_cost",
-            "sensor.return_to_grid_offpeak": "sensor.return_to_grid_offpeak_compensation",
+            "sensor.return_to_grid_offpeak": (
+                "sensor.return_to_grid_offpeak_compensation"
+            ),
         },
         "solar_forecast_domains": ["some_domain"],
     }
@@ -181,7 +183,6 @@ async def test_save_preferences(
                     {
                         "stat_energy_from": "sensor.heat_pump_meter",
                         "stat_cost": None,
-                        "entity_energy_from": None,
                         "entity_energy_price": None,
                         "number_energy_price": None,
                     }
@@ -206,7 +207,9 @@ async def test_save_preferences(
     assert msg["result"] == {**new_prefs, **new_prefs_2}
 
 
-async def test_handle_duplicate_from_stat(hass, hass_ws_client) -> None:
+async def test_handle_duplicate_from_stat(
+    hass: HomeAssistant, hass_ws_client: WebSocketGenerator
+) -> None:
     """Test we handle duplicate from stats."""
     client = await hass_ws_client(hass)
 
@@ -221,14 +224,12 @@ async def test_handle_duplicate_from_stat(hass, hass_ws_client) -> None:
                         {
                             "stat_energy_from": "sensor.heat_pump_meter",
                             "stat_cost": None,
-                            "entity_energy_from": None,
                             "entity_energy_price": None,
                             "number_energy_price": None,
                         },
                         {
                             "stat_energy_from": "sensor.heat_pump_meter",
                             "stat_cost": None,
-                            "entity_energy_from": None,
                             "entity_energy_price": None,
                             "number_energy_price": None,
                         },
@@ -247,7 +248,9 @@ async def test_handle_duplicate_from_stat(hass, hass_ws_client) -> None:
     assert msg["error"]["code"] == "invalid_format"
 
 
-async def test_validate(hass, hass_ws_client) -> None:
+async def test_validate(
+    hass: HomeAssistant, hass_ws_client: WebSocketGenerator
+) -> None:
     """Test we can validate the preferences."""
     client = await hass_ws_client(hass)
 
@@ -296,7 +299,7 @@ async def test_get_solar_forecast(hass, hass_ws_client, mock_energy_platform) ->
 
 
 @pytest.mark.freeze_time("2021-08-01 00:00:00+00:00")
-async def test_fossil_energy_consumption_no_co2(hass, hass_ws_client, recorder_mock):
+async def test_fossil_energy_consumption_no_co2(recorder_mock, hass, hass_ws_client):
     """Test fossil_energy_consumption when co2 data is missing."""
     now = dt_util.utcnow()
     later = dt_util.as_utc(dt_util.parse_datetime("2022-09-01 00:00:00"))
@@ -457,7 +460,7 @@ async def test_fossil_energy_consumption_no_co2(hass, hass_ws_client, recorder_m
 
 
 @pytest.mark.freeze_time("2021-08-01 00:00:00+00:00")
-async def test_fossil_energy_consumption_hole(hass, hass_ws_client, recorder_mock):
+async def test_fossil_energy_consumption_hole(recorder_mock, hass, hass_ws_client):
     """Test fossil_energy_consumption when some data points lack sum."""
     now = dt_util.utcnow()
     later = dt_util.as_utc(dt_util.parse_datetime("2022-09-01 00:00:00"))
@@ -618,7 +621,7 @@ async def test_fossil_energy_consumption_hole(hass, hass_ws_client, recorder_moc
 
 
 @pytest.mark.freeze_time("2021-08-01 00:00:00+00:00")
-async def test_fossil_energy_consumption_no_data(hass, hass_ws_client, recorder_mock):
+async def test_fossil_energy_consumption_no_data(recorder_mock, hass, hass_ws_client):
     """Test fossil_energy_consumption when there is no data."""
     now = dt_util.utcnow()
     later = dt_util.as_utc(dt_util.parse_datetime("2022-09-01 00:00:00"))
@@ -766,7 +769,7 @@ async def test_fossil_energy_consumption_no_data(hass, hass_ws_client, recorder_
 
 
 @pytest.mark.freeze_time("2021-08-01 00:00:00+00:00")
-async def test_fossil_energy_consumption(hass, hass_ws_client, recorder_mock):
+async def test_fossil_energy_consumption(recorder_mock, hass, hass_ws_client):
     """Test fossil_energy_consumption with co2 sensor data."""
     now = dt_util.utcnow()
     later = dt_util.as_utc(dt_util.parse_datetime("2022-09-01 00:00:00"))
@@ -821,25 +824,25 @@ async def test_fossil_energy_consumption(hass, hass_ws_client, recorder_mock):
             "start": period1,
             "last_reset": None,
             "state": 0,
-            "sum": 20,
+            "sum": 20000,
         },
         {
             "start": period2,
             "last_reset": None,
             "state": 1,
-            "sum": 30,
+            "sum": 30000,
         },
         {
             "start": period3,
             "last_reset": None,
             "state": 2,
-            "sum": 40,
+            "sum": 40000,
         },
         {
             "start": period4,
             "last_reset": None,
             "state": 3,
-            "sum": 50,
+            "sum": 50000,
         },
     )
     external_energy_metadata_2 = {
@@ -848,7 +851,7 @@ async def test_fossil_energy_consumption(hass, hass_ws_client, recorder_mock):
         "name": "Total imported energy",
         "source": "test",
         "statistic_id": "test:total_energy_import_tariff_2",
-        "unit_of_measurement": "kWh",
+        "unit_of_measurement": "Wh",
     }
     external_co2_statistics = (
         {
@@ -959,7 +962,9 @@ async def test_fossil_energy_consumption(hass, hass_ws_client, recorder_mock):
     }
 
 
-async def test_fossil_energy_consumption_checks(hass, hass_ws_client):
+async def test_fossil_energy_consumption_checks(
+    hass: HomeAssistant, hass_ws_client: WebSocketGenerator
+) -> None:
     """Test fossil_energy_consumption parameter validation."""
     client = await hass_ws_client(hass)
     now = dt_util.utcnow()

@@ -9,7 +9,6 @@ from homeassistant.components.light import (
     ATTR_EFFECT,
     ATTR_HS_COLOR,
     ATTR_TRANSITION,
-    SUPPORT_TRANSITION,
     ColorMode,
     LightEntityFeature,
 )
@@ -342,7 +341,7 @@ async def test_on_action_with_transition(hass, setup_light, calls):
     assert state.state == STATE_OFF
     assert "color_mode" not in state.attributes
     assert state.attributes["supported_color_modes"] == [ColorMode.BRIGHTNESS]
-    assert state.attributes["supported_features"] == SUPPORT_TRANSITION
+    assert state.attributes["supported_features"] == LightEntityFeature.TRANSITION
 
     await hass.services.async_call(
         light.DOMAIN,
@@ -357,7 +356,7 @@ async def test_on_action_with_transition(hass, setup_light, calls):
     assert state.state == STATE_OFF
     assert "color_mode" not in state.attributes
     assert state.attributes["supported_color_modes"] == [ColorMode.BRIGHTNESS]
-    assert state.attributes["supported_features"] == SUPPORT_TRANSITION
+    assert state.attributes["supported_features"] == LightEntityFeature.TRANSITION
 
 
 @pytest.mark.parametrize("count", [1])
@@ -498,7 +497,7 @@ async def test_off_action_with_transition(hass, setup_light, calls):
     assert state.state == STATE_ON
     assert state.attributes["color_mode"] == ColorMode.BRIGHTNESS
     assert state.attributes["supported_color_modes"] == [ColorMode.BRIGHTNESS]
-    assert state.attributes["supported_features"] == SUPPORT_TRANSITION
+    assert state.attributes["supported_features"] == LightEntityFeature.TRANSITION
 
     await hass.services.async_call(
         light.DOMAIN,
@@ -512,7 +511,7 @@ async def test_off_action_with_transition(hass, setup_light, calls):
     assert state.state == STATE_ON
     assert state.attributes["color_mode"] == ColorMode.BRIGHTNESS
     assert state.attributes["supported_color_modes"] == [ColorMode.BRIGHTNESS]
-    assert state.attributes["supported_features"] == SUPPORT_TRANSITION
+    assert state.attributes["supported_features"] == LightEntityFeature.TRANSITION
 
 
 @pytest.mark.parametrize("count", [1])
@@ -739,9 +738,9 @@ async def test_friendly_name(hass, setup_light):
                 **OPTIMISTIC_BRIGHTNESS_LIGHT_CONFIG,
                 "friendly_name": "Template light",
                 "value_template": "{{ 1 == 1 }}",
-                "icon_template": "{% if states.light.test_state.state %}"
-                "mdi:check"
-                "{% endif %}",
+                "icon_template": (
+                    "{% if states.light.test_state.state %}mdi:check{% endif %}"
+                ),
             }
         },
     ],
@@ -768,9 +767,9 @@ async def test_icon_template(hass, setup_light):
                 **OPTIMISTIC_BRIGHTNESS_LIGHT_CONFIG,
                 "friendly_name": "Template light",
                 "value_template": "{{ 1 == 1 }}",
-                "entity_picture_template": "{% if states.light.test_state.state %}"
-                "/local/light.png"
-                "{% endif %}",
+                "entity_picture_template": (
+                    "{% if states.light.test_state.state %}/local/light.png{% endif %}"
+                ),
             }
         },
     ],
@@ -1144,7 +1143,9 @@ async def test_effect_template(hass, expected_effect, count, effect_template):
                     "effect": "{{effect}}",
                 },
             },
-            "effect_list_template": "{{ ['Strobe color', 'Police', 'Christmas', 'RGB', 'Random Loop'] }}",
+            "effect_list_template": (
+                "{{ ['Strobe color', 'Police', 'Christmas', 'RGB', 'Random Loop'] }}"
+            ),
             "effect_template": effect_template,
         }
     }
@@ -1280,7 +1281,9 @@ async def test_supports_transition_template(
         {
             "test_template_light": {
                 **OPTIMISTIC_BRIGHTNESS_LIGHT_CONFIG,
-                "availability_template": "{{ is_state('availability_boolean.state', 'on') }}",
+                "availability_template": (
+                    "{{ is_state('availability_boolean.state', 'on') }}"
+                ),
             }
         },
     ],
@@ -1319,7 +1322,7 @@ async def test_invalid_availability_template_keeps_component_available(
 ):
     """Test that an invalid availability keeps the device available."""
     assert hass.states.get("light.test_template_light").state != STATE_UNAVAILABLE
-    assert ("UndefinedError: 'x' is undefined") in caplog_setup_text
+    assert "UndefinedError: 'x' is undefined" in caplog_setup_text
 
 
 @pytest.mark.parametrize("count", [1])

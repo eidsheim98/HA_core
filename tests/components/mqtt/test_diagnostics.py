@@ -7,6 +7,7 @@ import pytest
 
 from homeassistant.components import mqtt
 from homeassistant.const import Platform
+from homeassistant.core import HomeAssistant
 
 from tests.common import async_fire_mqtt_message, mock_device_registry
 from tests.components.diagnostics import (
@@ -23,6 +24,9 @@ default_config = {
     "port": 1883,
     "protocol": "3.1.1",
     "tls_version": "auto",
+    "transport": "tcp",
+    "ws_headers": {},
+    "ws_path": "/",
     "will_message": {
         "payload": "offline",
         "qos": 0,
@@ -43,14 +47,14 @@ def device_tracker_sensor_only():
 
 
 @pytest.fixture
-def device_reg(hass):
+def device_reg(hass: HomeAssistant):
     """Return an empty, loaded, registry."""
     return mock_device_registry(hass)
 
 
 async def test_entry_diagnostics(
-    hass, device_reg, hass_client, mqtt_mock_entry_no_yaml_config
-):
+    hass: HomeAssistant, device_reg, hass_client, mqtt_mock_entry_no_yaml_config
+) -> None:
     """Test config entry diagnostics."""
     mqtt_mock = await mqtt_mock_entry_no_yaml_config()
     config_entry = hass.config_entries.async_entries(mqtt.DOMAIN)[0]
@@ -169,8 +173,8 @@ async def test_entry_diagnostics(
     ],
 )
 async def test_redact_diagnostics(
-    hass, device_reg, hass_client, mqtt_mock_entry_no_yaml_config
-):
+    hass: HomeAssistant, device_reg, hass_client, mqtt_mock_entry_no_yaml_config
+) -> None:
     """Test redacting diagnostics."""
     mqtt_mock = await mqtt_mock_entry_no_yaml_config()
     expected_config = dict(default_config)
@@ -248,7 +252,7 @@ async def test_redact_diagnostics(
                         "gps_accuracy": 1.5,
                         "latitude": "**REDACTED**",
                         "longitude": "**REDACTED**",
-                        "source_type": None,
+                        "source_type": "gps",
                     },
                     "entity_id": "device_tracker.mqtt_unique",
                     "last_changed": ANY,

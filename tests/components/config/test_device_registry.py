@@ -2,6 +2,7 @@
 import pytest
 
 from homeassistant.components.config import device_registry
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as helpers_dr
 from homeassistant.setup import async_setup_component
 
@@ -12,13 +13,14 @@ from tests.common import (
     mock_integration,
 )
 from tests.components.blueprint.conftest import stub_blueprint_populate  # noqa: F401
+from tests.typing import WebSocketGenerator
 
 
 @pytest.fixture
 def client(hass, hass_ws_client):
     """Fixture that can interact with the config manager API."""
     hass.loop.run_until_complete(device_registry.async_setup(hass))
-    yield hass.loop.run_until_complete(hass_ws_client(hass))
+    return hass.loop.run_until_complete(hass_ws_client(hass))
 
 
 @pytest.fixture
@@ -85,7 +87,10 @@ async def test_list_devices(hass, client, registry):
         },
     ]
 
-    registry.async_remove_device(device2.id)
+    class Unserializable:
+        """Good luck serializing me."""
+
+    registry.async_update_device(device2.id, name=Unserializable())
     await hass.async_block_till_done()
 
     await client.send_json({"id": 6, "type": "config/device_registry/list"})
@@ -110,6 +115,9 @@ async def test_list_devices(hass, client, registry):
             "via_device_id": None,
         }
     ]
+
+    # Remove the bad device to avoid errors when test is being torn down
+    registry.async_remove_device(device2.id)
 
 
 @pytest.mark.parametrize(
@@ -160,7 +168,9 @@ async def test_update_device(hass, client, registry, payload_key, payload_value)
     assert isinstance(device.disabled_by, (helpers_dr.DeviceEntryDisabler, type(None)))
 
 
-async def test_remove_config_entry_from_device(hass, hass_ws_client):
+async def test_remove_config_entry_from_device(
+    hass: HomeAssistant, hass_ws_client: WebSocketGenerator
+) -> None:
     """Test removing config entry from device."""
     assert await async_setup_component(hass, "config", {})
     ws_client = await hass_ws_client(hass)
@@ -265,7 +275,9 @@ async def test_remove_config_entry_from_device(hass, hass_ws_client):
     assert not device_registry.async_get(device_entry.id)
 
 
-async def test_remove_config_entry_from_device_fails(hass, hass_ws_client):
+async def test_remove_config_entry_from_device_fails(
+    hass: HomeAssistant, hass_ws_client: WebSocketGenerator
+) -> None:
     """Test removing config entry from device failing cases."""
     assert await async_setup_component(hass, "config", {})
     ws_client = await hass_ws_client(hass)

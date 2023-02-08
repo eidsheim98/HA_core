@@ -1,5 +1,4 @@
 """Tests for homekit_controller init."""
-
 from datetime import timedelta
 from unittest.mock import patch
 
@@ -18,10 +17,15 @@ from homeassistant.helpers.entity_registry import EntityRegistry
 from homeassistant.setup import async_setup_component
 from homeassistant.util.dt import utcnow
 
-from .common import Helper, remove_device, setup_test_accessories_with_controller
+from .common import (
+    Helper,
+    remove_device,
+    setup_test_accessories_with_controller,
+    setup_test_component,
+)
 
 from tests.common import async_fire_time_changed
-from tests.components.homekit_controller.common import setup_test_component
+from tests.typing import WebSocketGenerator
 
 ALIVE_DEVICE_NAME = "testdevice"
 ALIVE_DEVICE_ENTITY_ID = "light.testdevice"
@@ -71,7 +75,9 @@ def create_alive_service(accessory):
     return service
 
 
-async def test_device_remove_devices(hass, hass_ws_client):
+async def test_device_remove_devices(
+    hass: HomeAssistant, hass_ws_client: WebSocketGenerator
+) -> None:
     """Test we can only remove a device that no longer exists."""
     assert await async_setup_component(hass, "config", {})
     helper: Helper = await setup_test_component(hass, create_alive_service)

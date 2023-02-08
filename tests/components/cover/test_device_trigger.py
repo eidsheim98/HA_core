@@ -4,12 +4,7 @@ from datetime import timedelta
 import pytest
 
 import homeassistant.components.automation as automation
-from homeassistant.components.cover import (
-    DOMAIN,
-    SUPPORT_OPEN,
-    SUPPORT_SET_POSITION,
-    SUPPORT_SET_TILT_POSITION,
-)
+from homeassistant.components.cover import DOMAIN, CoverEntityFeature
 from homeassistant.components.device_automation import DeviceAutomationType
 from homeassistant.const import (
     CONF_PLATFORM,
@@ -18,7 +13,7 @@ from homeassistant.const import (
     STATE_OPEN,
     STATE_OPENING,
 )
-from homeassistant.helpers import device_registry
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_registry import RegistryEntryHider
 from homeassistant.setup import async_setup_component
@@ -31,22 +26,8 @@ from tests.common import (
     async_get_device_automation_capabilities,
     async_get_device_automations,
     async_mock_service,
-    mock_device_registry,
-    mock_registry,
 )
 from tests.components.blueprint.conftest import stub_blueprint_populate  # noqa: F401
-
-
-@pytest.fixture
-def device_reg(hass):
-    """Return an empty, loaded, registry."""
-    return mock_device_registry(hass)
-
-
-@pytest.fixture
-def entity_reg(hass):
-    """Return an empty, loaded, registry."""
-    return mock_registry(hass)
 
 
 @pytest.fixture
@@ -58,38 +39,38 @@ def calls(hass):
 @pytest.mark.parametrize(
     "set_state,features_reg,features_state,expected_trigger_types",
     [
-        (False, SUPPORT_OPEN, 0, ["opened", "closed", "opening", "closing"]),
+        (False, CoverEntityFeature.OPEN, 0, ["opened", "closed", "opening", "closing"]),
         (
             False,
-            SUPPORT_OPEN | SUPPORT_SET_POSITION,
+            CoverEntityFeature.OPEN | CoverEntityFeature.SET_POSITION,
             0,
             ["opened", "closed", "opening", "closing", "position"],
         ),
         (
             False,
-            SUPPORT_OPEN | SUPPORT_SET_TILT_POSITION,
+            CoverEntityFeature.OPEN | CoverEntityFeature.SET_TILT_POSITION,
             0,
             ["opened", "closed", "opening", "closing", "tilt_position"],
         ),
-        (True, 0, SUPPORT_OPEN, ["opened", "closed", "opening", "closing"]),
+        (True, 0, CoverEntityFeature.OPEN, ["opened", "closed", "opening", "closing"]),
         (
             True,
             0,
-            SUPPORT_OPEN | SUPPORT_SET_POSITION,
+            CoverEntityFeature.OPEN | CoverEntityFeature.SET_POSITION,
             ["opened", "closed", "opening", "closing", "position"],
         ),
         (
             True,
             0,
-            SUPPORT_OPEN | SUPPORT_SET_TILT_POSITION,
+            CoverEntityFeature.OPEN | CoverEntityFeature.SET_TILT_POSITION,
             ["opened", "closed", "opening", "closing", "tilt_position"],
         ),
     ],
 )
 async def test_get_triggers(
     hass,
-    device_reg,
-    entity_reg,
+    device_registry,
+    entity_registry,
     set_state,
     features_reg,
     features_state,
@@ -98,11 +79,11 @@ async def test_get_triggers(
     """Test we get the expected triggers from a cover."""
     config_entry = MockConfigEntry(domain="test", data={})
     config_entry.add_to_hass(hass)
-    device_entry = device_reg.async_get_or_create(
+    device_entry = device_registry.async_get_or_create(
         config_entry_id=config_entry.entry_id,
-        connections={(device_registry.CONNECTION_NETWORK_MAC, "12:34:56:AB:CD:EF")},
+        connections={(dr.CONNECTION_NETWORK_MAC, "12:34:56:AB:CD:EF")},
     )
-    entity_reg.async_get_or_create(
+    entity_registry.async_get_or_create(
         DOMAIN,
         "test",
         "5678",
@@ -146,26 +127,26 @@ async def test_get_triggers(
 )
 async def test_get_triggers_hidden_auxiliary(
     hass,
-    device_reg,
-    entity_reg,
+    device_registry,
+    entity_registry,
     hidden_by,
     entity_category,
 ):
     """Test we get the expected triggers from a hidden or auxiliary entity."""
     config_entry = MockConfigEntry(domain="test", data={})
     config_entry.add_to_hass(hass)
-    device_entry = device_reg.async_get_or_create(
+    device_entry = device_registry.async_get_or_create(
         config_entry_id=config_entry.entry_id,
-        connections={(device_registry.CONNECTION_NETWORK_MAC, "12:34:56:AB:CD:EF")},
+        connections={(dr.CONNECTION_NETWORK_MAC, "12:34:56:AB:CD:EF")},
     )
-    entity_reg.async_get_or_create(
+    entity_registry.async_get_or_create(
         DOMAIN,
         "test",
         "5678",
         device_id=device_entry.id,
         entity_category=entity_category,
         hidden_by=hidden_by,
-        supported_features=SUPPORT_OPEN,
+        supported_features=CoverEntityFeature.OPEN,
     )
     expected_triggers = [
         {
@@ -185,7 +166,7 @@ async def test_get_triggers_hidden_auxiliary(
 
 
 async def test_get_trigger_capabilities(
-    hass, device_reg, entity_reg, enable_custom_integrations
+    hass, device_registry, entity_registry, enable_custom_integrations
 ):
     """Test we get the expected capabilities from a cover trigger."""
     platform = getattr(hass.components, f"test.{DOMAIN}")
@@ -196,11 +177,11 @@ async def test_get_trigger_capabilities(
 
     config_entry = MockConfigEntry(domain="test", data={})
     config_entry.add_to_hass(hass)
-    device_entry = device_reg.async_get_or_create(
+    device_entry = device_registry.async_get_or_create(
         config_entry_id=config_entry.entry_id,
-        connections={(device_registry.CONNECTION_NETWORK_MAC, "12:34:56:AB:CD:EF")},
+        connections={(dr.CONNECTION_NETWORK_MAC, "12:34:56:AB:CD:EF")},
     )
-    entity_reg.async_get_or_create(
+    entity_registry.async_get_or_create(
         DOMAIN, "test", ent.unique_id, device_id=device_entry.id
     )
 
@@ -220,7 +201,7 @@ async def test_get_trigger_capabilities(
 
 
 async def test_get_trigger_capabilities_set_pos(
-    hass, device_reg, entity_reg, enable_custom_integrations
+    hass, device_registry, entity_registry, enable_custom_integrations
 ):
     """Test we get the expected capabilities from a cover trigger."""
     platform = getattr(hass.components, f"test.{DOMAIN}")
@@ -231,11 +212,11 @@ async def test_get_trigger_capabilities_set_pos(
 
     config_entry = MockConfigEntry(domain="test", data={})
     config_entry.add_to_hass(hass)
-    device_entry = device_reg.async_get_or_create(
+    device_entry = device_registry.async_get_or_create(
         config_entry_id=config_entry.entry_id,
-        connections={(device_registry.CONNECTION_NETWORK_MAC, "12:34:56:AB:CD:EF")},
+        connections={(dr.CONNECTION_NETWORK_MAC, "12:34:56:AB:CD:EF")},
     )
-    entity_reg.async_get_or_create(
+    entity_registry.async_get_or_create(
         DOMAIN, "test", ent.unique_id, device_id=device_entry.id
     )
 
@@ -282,7 +263,7 @@ async def test_get_trigger_capabilities_set_pos(
 
 
 async def test_get_trigger_capabilities_set_tilt_pos(
-    hass, device_reg, entity_reg, enable_custom_integrations
+    hass, device_registry, entity_registry, enable_custom_integrations
 ):
     """Test we get the expected capabilities from a cover trigger."""
     platform = getattr(hass.components, f"test.{DOMAIN}")
@@ -293,11 +274,11 @@ async def test_get_trigger_capabilities_set_tilt_pos(
 
     config_entry = MockConfigEntry(domain="test", data={})
     config_entry.add_to_hass(hass)
-    device_entry = device_reg.async_get_or_create(
+    device_entry = device_registry.async_get_or_create(
         config_entry_id=config_entry.entry_id,
-        connections={(device_registry.CONNECTION_NETWORK_MAC, "12:34:56:AB:CD:EF")},
+        connections={(dr.CONNECTION_NETWORK_MAC, "12:34:56:AB:CD:EF")},
     )
-    entity_reg.async_get_or_create(
+    entity_registry.async_get_or_create(
         DOMAIN, "test", ent.unique_id, device_id=device_entry.id
     )
 
@@ -364,9 +345,12 @@ async def test_if_fires_on_state_change(hass, calls):
                         "service": "test.automation",
                         "data_template": {
                             "some": (
-                                "opened - {{ trigger.platform}} - "
-                                "{{ trigger.entity_id}} - {{ trigger.from_state.state}} - "
-                                "{{ trigger.to_state.state}} - {{ trigger.for }}"
+                                "opened "
+                                "- {{ trigger.platform }} "
+                                "- {{ trigger.entity_id }} "
+                                "- {{ trigger.from_state.state }} "
+                                "- {{ trigger.to_state.state }} "
+                                "- {{ trigger.for }}"
                             )
                         },
                     },
@@ -383,9 +367,12 @@ async def test_if_fires_on_state_change(hass, calls):
                         "service": "test.automation",
                         "data_template": {
                             "some": (
-                                "closed - {{ trigger.platform}} - "
-                                "{{ trigger.entity_id}} - {{ trigger.from_state.state}} - "
-                                "{{ trigger.to_state.state}} - {{ trigger.for }}"
+                                "closed "
+                                "- {{ trigger.platform }} "
+                                "- {{ trigger.entity_id }} "
+                                "- {{ trigger.from_state.state }} "
+                                "- {{ trigger.to_state.state }} "
+                                "- {{ trigger.for }}"
                             )
                         },
                     },
@@ -402,9 +389,12 @@ async def test_if_fires_on_state_change(hass, calls):
                         "service": "test.automation",
                         "data_template": {
                             "some": (
-                                "opening - {{ trigger.platform}} - "
-                                "{{ trigger.entity_id}} - {{ trigger.from_state.state}} - "
-                                "{{ trigger.to_state.state}} - {{ trigger.for }}"
+                                "opening "
+                                "- {{ trigger.platform }} "
+                                "- {{ trigger.entity_id }} "
+                                "- {{ trigger.from_state.state }} "
+                                "- {{ trigger.to_state.state }} "
+                                "- {{ trigger.for }}"
                             )
                         },
                     },
@@ -421,9 +411,12 @@ async def test_if_fires_on_state_change(hass, calls):
                         "service": "test.automation",
                         "data_template": {
                             "some": (
-                                "closing - {{ trigger.platform}} - "
-                                "{{ trigger.entity_id}} - {{ trigger.from_state.state}} - "
-                                "{{ trigger.to_state.state}} - {{ trigger.for }}"
+                                "closing "
+                                "- {{ trigger.platform }} "
+                                "- {{ trigger.entity_id }} "
+                                "- {{ trigger.from_state.state }} "
+                                "- {{ trigger.to_state.state }} "
+                                "- {{ trigger.for }}"
                             )
                         },
                     },
@@ -548,9 +541,12 @@ async def test_if_fires_on_position(hass, calls, enable_custom_integrations):
                         "service": "test.automation",
                         "data_template": {
                             "some": (
-                                "is_pos_gt_45 - {{ trigger.platform}} - "
-                                "{{ trigger.entity_id}} - {{ trigger.from_state.state}} - "
-                                "{{ trigger.to_state.state}} - {{ trigger.for }}"
+                                "is_pos_gt_45 "
+                                "- {{ trigger.platform }} "
+                                "- {{ trigger.entity_id }} "
+                                "- {{ trigger.from_state.state }} "
+                                "- {{ trigger.to_state.state }} "
+                                "- {{ trigger.for }}"
                             )
                         },
                     },
@@ -570,9 +566,12 @@ async def test_if_fires_on_position(hass, calls, enable_custom_integrations):
                         "service": "test.automation",
                         "data_template": {
                             "some": (
-                                "is_pos_lt_90 - {{ trigger.platform}} - "
-                                "{{ trigger.entity_id}} - {{ trigger.from_state.state}} - "
-                                "{{ trigger.to_state.state}} - {{ trigger.for }}"
+                                "is_pos_lt_90 "
+                                "- {{ trigger.platform }} "
+                                "- {{ trigger.entity_id }} "
+                                "- {{ trigger.from_state.state }} "
+                                "- {{ trigger.to_state.state }} "
+                                "- {{ trigger.for }}"
                             )
                         },
                     },
@@ -593,9 +592,12 @@ async def test_if_fires_on_position(hass, calls, enable_custom_integrations):
                         "service": "test.automation",
                         "data_template": {
                             "some": (
-                                "is_pos_gt_45_lt_90 - {{ trigger.platform}} - "
-                                "{{ trigger.entity_id}} - {{ trigger.from_state.state}} - "
-                                "{{ trigger.to_state.state}} - {{ trigger.for }}"
+                                "is_pos_gt_45_lt_90 "
+                                "- {{ trigger.platform }} "
+                                "- {{ trigger.entity_id }} "
+                                "- {{ trigger.from_state.state }} "
+                                "- {{ trigger.to_state.state }} "
+                                "- {{ trigger.for }}"
                             )
                         },
                     },
@@ -616,7 +618,10 @@ async def test_if_fires_on_position(hass, calls, enable_custom_integrations):
         [calls[0].data["some"], calls[1].data["some"], calls[2].data["some"]]
     ) == sorted(
         [
-            "is_pos_gt_45_lt_90 - device - cover.set_position_cover - closed - open - None",
+            (
+                "is_pos_gt_45_lt_90 - device - cover.set_position_cover - closed - open"
+                " - None"
+            ),
             "is_pos_lt_90 - device - cover.set_position_cover - closed - open - None",
             "is_pos_gt_45 - device - cover.set_position_cover - open - closed - None",
         ]
@@ -675,9 +680,12 @@ async def test_if_fires_on_tilt_position(hass, calls, enable_custom_integrations
                         "service": "test.automation",
                         "data_template": {
                             "some": (
-                                "is_pos_gt_45 - {{ trigger.platform}} - "
-                                "{{ trigger.entity_id}} - {{ trigger.from_state.state}} - "
-                                "{{ trigger.to_state.state}} - {{ trigger.for }}"
+                                "is_pos_gt_45 "
+                                "- {{ trigger.platform }} "
+                                "- {{ trigger.entity_id }} "
+                                "- {{ trigger.from_state.state }} "
+                                "- {{ trigger.to_state.state }} "
+                                "- {{ trigger.for }}"
                             )
                         },
                     },
@@ -697,9 +705,12 @@ async def test_if_fires_on_tilt_position(hass, calls, enable_custom_integrations
                         "service": "test.automation",
                         "data_template": {
                             "some": (
-                                "is_pos_lt_90 - {{ trigger.platform}} - "
-                                "{{ trigger.entity_id}} - {{ trigger.from_state.state}} - "
-                                "{{ trigger.to_state.state}} - {{ trigger.for }}"
+                                "is_pos_lt_90 "
+                                "- {{ trigger.platform }} "
+                                "- {{ trigger.entity_id }} "
+                                "- {{ trigger.from_state.state }} "
+                                "- {{ trigger.to_state.state }} "
+                                "- {{ trigger.for }}"
                             )
                         },
                     },
@@ -720,9 +731,12 @@ async def test_if_fires_on_tilt_position(hass, calls, enable_custom_integrations
                         "service": "test.automation",
                         "data_template": {
                             "some": (
-                                "is_pos_gt_45_lt_90 - {{ trigger.platform}} - "
-                                "{{ trigger.entity_id}} - {{ trigger.from_state.state}} - "
-                                "{{ trigger.to_state.state}} - {{ trigger.for }}"
+                                "is_pos_gt_45_lt_90 "
+                                "- {{ trigger.platform }} "
+                                "- {{ trigger.entity_id }} "
+                                "- {{ trigger.from_state.state }} "
+                                "- {{ trigger.to_state.state }} "
+                                "- {{ trigger.for }}"
                             )
                         },
                     },
@@ -745,7 +759,10 @@ async def test_if_fires_on_tilt_position(hass, calls, enable_custom_integrations
         [calls[0].data["some"], calls[1].data["some"], calls[2].data["some"]]
     ) == sorted(
         [
-            "is_pos_gt_45_lt_90 - device - cover.set_position_cover - closed - open - None",
+            (
+                "is_pos_gt_45_lt_90 - device - cover.set_position_cover - closed - open"
+                " - None"
+            ),
             "is_pos_lt_90 - device - cover.set_position_cover - closed - open - None",
             "is_pos_gt_45 - device - cover.set_position_cover - open - closed - None",
         ]

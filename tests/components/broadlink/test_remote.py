@@ -9,7 +9,8 @@ from homeassistant.components.remote import (
     SERVICE_TURN_OFF,
     SERVICE_TURN_ON,
 )
-from homeassistant.const import STATE_OFF, STATE_ON, Platform
+from homeassistant.const import ATTR_FRIENDLY_NAME, STATE_OFF, STATE_ON, Platform
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_registry import async_entries_for_device
 
 from . import get_device
@@ -24,7 +25,7 @@ IR_PACKET = (
 )
 
 
-async def test_remote_setup_works(hass):
+async def test_remote_setup_works(hass: HomeAssistant) -> None:
     """Test a successful setup with all remotes."""
     for device in map(get_device, REMOTE_DEVICES):
         device_registry = mock_device_registry(hass)
@@ -39,12 +40,15 @@ async def test_remote_setup_works(hass):
         assert len(remotes) == 1
 
         remote = remotes[0]
-        assert remote.original_name == f"{device.name} Remote"
+        assert (
+            hass.states.get(remote.entity_id).attributes[ATTR_FRIENDLY_NAME]
+            == device.name
+        )
         assert hass.states.get(remote.entity_id).state == STATE_ON
         assert mock_setup.api.auth.call_count == 1
 
 
-async def test_remote_send_command(hass):
+async def test_remote_send_command(hass: HomeAssistant) -> None:
     """Test sending a command with all remotes."""
     for device in map(get_device, REMOTE_DEVICES):
         device_registry = mock_device_registry(hass)
@@ -71,7 +75,7 @@ async def test_remote_send_command(hass):
         assert mock_setup.api.auth.call_count == 1
 
 
-async def test_remote_turn_off_turn_on(hass):
+async def test_remote_turn_off_turn_on(hass: HomeAssistant) -> None:
     """Test we do not send commands if the remotes are off."""
     for device in map(get_device, REMOTE_DEVICES):
         device_registry = mock_device_registry(hass)

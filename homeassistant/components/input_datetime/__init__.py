@@ -5,6 +5,7 @@ import datetime as py_datetime
 import logging
 from typing import Any
 
+from typing_extensions import Self
 import voluptuous as vol
 
 from homeassistant.const import (
@@ -61,17 +62,10 @@ def validate_set_datetime_attrs(config):
 STORAGE_KEY = DOMAIN
 STORAGE_VERSION = 1
 
-CREATE_FIELDS = {
+STORAGE_FIELDS = {
     vol.Required(CONF_NAME): vol.All(str, vol.Length(min=1)),
     vol.Optional(CONF_HAS_DATE, default=False): cv.boolean,
     vol.Optional(CONF_HAS_TIME, default=False): cv.boolean,
-    vol.Optional(CONF_ICON): cv.icon,
-    vol.Optional(CONF_INITIAL): cv.string,
-}
-UPDATE_FIELDS = {
-    vol.Optional(CONF_NAME): cv.string,
-    vol.Optional(CONF_HAS_DATE): cv.boolean,
-    vol.Optional(CONF_HAS_TIME): cv.boolean,
     vol.Optional(CONF_ICON): cv.icon,
     vol.Optional(CONF_INITIAL): cv.string,
 }
@@ -137,7 +131,7 @@ RELOAD_SERVICE_SCHEMA = vol.Schema({})
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Set up an input datetime."""
-    component = EntityComponent(_LOGGER, DOMAIN, hass)
+    component = EntityComponent[InputDatetime](_LOGGER, DOMAIN, hass)
 
     # Process integration platforms right away since
     # we will create entities before firing EVENT_COMPONENT_LOADED
@@ -167,7 +161,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     await storage_collection.async_load()
 
     collection.StorageCollectionWebsocket(
-        storage_collection, DOMAIN, DOMAIN, CREATE_FIELDS, UPDATE_FIELDS
+        storage_collection, DOMAIN, DOMAIN, STORAGE_FIELDS, STORAGE_FIELDS
     ).async_setup(hass)
 
     async def reload_service_handler(service_call: ServiceCall) -> None:
@@ -213,12 +207,11 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 class DateTimeStorageCollection(collection.StorageCollection):
     """Input storage based collection."""
 
-    CREATE_SCHEMA = vol.Schema(vol.All(CREATE_FIELDS, has_date_or_time))
-    UPDATE_SCHEMA = vol.Schema(UPDATE_FIELDS)
+    CREATE_UPDATE_SCHEMA = vol.Schema(vol.All(STORAGE_FIELDS, has_date_or_time))
 
     async def _process_create_data(self, data: dict) -> dict:
         """Validate the config is valid."""
-        return self.CREATE_SCHEMA(data)
+        return self.CREATE_UPDATE_SCHEMA(data)
 
     @callback
     def _get_suggested_id(self, info: dict) -> str:
@@ -227,8 +220,8 @@ class DateTimeStorageCollection(collection.StorageCollection):
 
     async def _update_data(self, data: dict, update_data: dict) -> dict:
         """Return a new updated data object."""
-        update_data = self.UPDATE_SCHEMA(update_data)
-        return has_date_or_time({**data, **update_data})
+        update_data = self.CREATE_UPDATE_SCHEMA(update_data)
+        return {CONF_ID: data[CONF_ID]} | update_data
 
 
 class InputDatetime(collection.CollectionEntity, RestoreEntity):
@@ -258,14 +251,14 @@ class InputDatetime(collection.CollectionEntity, RestoreEntity):
             )
 
     @classmethod
-    def from_storage(cls, config: ConfigType) -> InputDatetime:
+    def from_storage(cls, config: ConfigType) -> Self:
         """Return entity instance initialized from storage."""
         input_dt = cls(config)
         input_dt.editable = True
         return input_dt
 
     @classmethod
-    def from_yaml(cls, config: ConfigType) -> InputDatetime:
+    def from_yaml(cls, config: ConfigType) -> Self:
         """Return entity instance initialized from yaml."""
         input_dt = cls(config)
         input_dt.entity_id = f"{DOMAIN}.{config[CONF_ID]}"

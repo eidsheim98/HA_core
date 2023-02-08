@@ -6,6 +6,8 @@ import broadlink.exceptions as blke
 from homeassistant.components.broadlink.const import DOMAIN
 from homeassistant.components.broadlink.device import get_domains
 from homeassistant.config_entries import ConfigEntryState
+from homeassistant.const import ATTR_FRIENDLY_NAME
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_registry import async_entries_for_device
 
 from . import get_device
@@ -15,7 +17,7 @@ from tests.common import mock_device_registry, mock_registry
 DEVICE_FACTORY = "homeassistant.components.broadlink.device.blk.gendevice"
 
 
-async def test_device_setup(hass):
+async def test_device_setup(hass: HomeAssistant) -> None:
     """Test a successful setup."""
     device = get_device("Office")
 
@@ -38,7 +40,7 @@ async def test_device_setup(hass):
     assert mock_init.call_count == 0
 
 
-async def test_device_setup_authentication_error(hass):
+async def test_device_setup_authentication_error(hass: HomeAssistant) -> None:
     """Test we handle an authentication error."""
     device = get_device("Living Room")
     mock_api = device.get_mock_api()
@@ -62,7 +64,7 @@ async def test_device_setup_authentication_error(hass):
     }
 
 
-async def test_device_setup_network_timeout(hass):
+async def test_device_setup_network_timeout(hass: HomeAssistant) -> None:
     """Test we handle a network timeout."""
     device = get_device("Office")
     mock_api = device.get_mock_api()
@@ -81,7 +83,7 @@ async def test_device_setup_network_timeout(hass):
     assert mock_init.call_count == 0
 
 
-async def test_device_setup_os_error(hass):
+async def test_device_setup_os_error(hass: HomeAssistant) -> None:
     """Test we handle an OS error."""
     device = get_device("Office")
     mock_api = device.get_mock_api()
@@ -100,7 +102,7 @@ async def test_device_setup_os_error(hass):
     assert mock_init.call_count == 0
 
 
-async def test_device_setup_broadlink_exception(hass):
+async def test_device_setup_broadlink_exception(hass: HomeAssistant) -> None:
     """Test we handle a Broadlink exception."""
     device = get_device("Office")
     mock_api = device.get_mock_api()
@@ -119,7 +121,7 @@ async def test_device_setup_broadlink_exception(hass):
     assert mock_init.call_count == 0
 
 
-async def test_device_setup_update_network_timeout(hass):
+async def test_device_setup_update_network_timeout(hass: HomeAssistant) -> None:
     """Test we handle a network timeout in the update step."""
     device = get_device("Office")
     mock_api = device.get_mock_api()
@@ -139,7 +141,7 @@ async def test_device_setup_update_network_timeout(hass):
     assert mock_init.call_count == 0
 
 
-async def test_device_setup_update_authorization_error(hass):
+async def test_device_setup_update_authorization_error(hass: HomeAssistant) -> None:
     """Test we handle an authorization error in the update step."""
     device = get_device("Office")
     mock_api = device.get_mock_api()
@@ -166,7 +168,7 @@ async def test_device_setup_update_authorization_error(hass):
     assert mock_init.call_count == 0
 
 
-async def test_device_setup_update_authentication_error(hass):
+async def test_device_setup_update_authentication_error(hass: HomeAssistant) -> None:
     """Test we handle an authentication error in the update step."""
     device = get_device("Garage")
     mock_api = device.get_mock_api()
@@ -192,7 +194,7 @@ async def test_device_setup_update_authentication_error(hass):
     }
 
 
-async def test_device_setup_update_broadlink_exception(hass):
+async def test_device_setup_update_broadlink_exception(hass: HomeAssistant) -> None:
     """Test we handle a Broadlink exception in the update step."""
     device = get_device("Garage")
     mock_api = device.get_mock_api()
@@ -212,7 +214,9 @@ async def test_device_setup_update_broadlink_exception(hass):
     assert mock_init.call_count == 0
 
 
-async def test_device_setup_get_fwversion_broadlink_exception(hass):
+async def test_device_setup_get_fwversion_broadlink_exception(
+    hass: HomeAssistant,
+) -> None:
     """Test we load the device even if we cannot read the firmware version."""
     device = get_device("Office")
     mock_api = device.get_mock_api()
@@ -228,7 +232,7 @@ async def test_device_setup_get_fwversion_broadlink_exception(hass):
     assert forward_entries == domains
 
 
-async def test_device_setup_get_fwversion_os_error(hass):
+async def test_device_setup_get_fwversion_os_error(hass: HomeAssistant) -> None:
     """Test we load the device even if we cannot read the firmware version."""
     device = get_device("Office")
     mock_api = device.get_mock_api()
@@ -244,7 +248,7 @@ async def test_device_setup_get_fwversion_os_error(hass):
     assert forward_entries == domains
 
 
-async def test_device_setup_registry(hass):
+async def test_device_setup_registry(hass: HomeAssistant) -> None:
     """Test we register the device and the entries correctly."""
     device = get_device("Office")
 
@@ -266,10 +270,14 @@ async def test_device_setup_registry(hass):
     assert device_entry.sw_version == device.fwversion
 
     for entry in async_entries_for_device(entity_registry, device_entry.id):
-        assert entry.original_name.startswith(device.name)
+        assert (
+            hass.states.get(entry.entity_id)
+            .attributes[ATTR_FRIENDLY_NAME]
+            .startswith(device.name)
+        )
 
 
-async def test_device_unload_works(hass):
+async def test_device_unload_works(hass: HomeAssistant) -> None:
     """Test we unload the device."""
     device = get_device("Office")
 
@@ -288,7 +296,7 @@ async def test_device_unload_works(hass):
     assert forward_entries == domains
 
 
-async def test_device_unload_authentication_error(hass):
+async def test_device_unload_authentication_error(hass: HomeAssistant) -> None:
     """Test we unload a device that failed the authentication step."""
     device = get_device("Living Room")
     mock_api = device.get_mock_api()
@@ -308,7 +316,7 @@ async def test_device_unload_authentication_error(hass):
     assert mock_forward.call_count == 0
 
 
-async def test_device_unload_update_failed(hass):
+async def test_device_unload_update_failed(hass: HomeAssistant) -> None:
     """Test we unload a device that failed the update step."""
     device = get_device("Office")
     mock_api = device.get_mock_api()
@@ -326,7 +334,7 @@ async def test_device_unload_update_failed(hass):
     assert mock_forward.call_count == 0
 
 
-async def test_device_update_listener(hass):
+async def test_device_update_listener(hass: HomeAssistant) -> None:
     """Test we update device and entity registry when the entry is renamed."""
     device = get_device("Office")
 
@@ -345,4 +353,8 @@ async def test_device_update_listener(hass):
     )
     assert device_entry.name == "New Name"
     for entry in async_entries_for_device(entity_registry, device_entry.id):
-        assert entry.original_name.startswith("New Name")
+        assert (
+            hass.states.get(entry.entity_id)
+            .attributes[ATTR_FRIENDLY_NAME]
+            .startswith("New Name")
+        )
