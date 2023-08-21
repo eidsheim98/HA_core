@@ -1,7 +1,6 @@
 """The tests for the Group Switch platform."""
+import asyncio
 from unittest.mock import patch
-
-import async_timeout
 
 from homeassistant import config as hass_config
 from homeassistant.components.group import DOMAIN, SERVICE_RELOAD
@@ -231,7 +230,9 @@ async def test_state_reporting_all(hass: HomeAssistant) -> None:
     assert hass.states.get("switch.switch_group").state == STATE_UNAVAILABLE
 
 
-async def test_service_calls(hass, enable_custom_integrations):
+async def test_service_calls(
+    hass: HomeAssistant, enable_custom_integrations: None
+) -> None:
     """Test service calls."""
     await async_setup_component(
         hass,
@@ -443,7 +444,7 @@ async def test_nested_group(hass: HomeAssistant) -> None:
     assert state.attributes.get(ATTR_ENTITY_ID) == ["switch.some_group"]
 
     # Test controlling the nested group
-    async with async_timeout.timeout(0.5):
+    async with asyncio.timeout(0.5):
         await hass.services.async_call(
             SWITCH_DOMAIN,
             SERVICE_TOGGLE,

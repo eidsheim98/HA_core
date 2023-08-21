@@ -9,9 +9,9 @@ from elgato import Elgato, ElgatoError
 
 from homeassistant.components.switch import SwitchEntity, SwitchEntityDescription
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN
@@ -39,12 +39,23 @@ class ElgatoSwitchEntityDescription(
 SWITCHES = [
     ElgatoSwitchEntityDescription(
         key="bypass",
-        name="Studio mode",
+        translation_key="bypass",
         icon="mdi:battery-off-outline",
         entity_category=EntityCategory.CONFIG,
         has_fn=lambda x: x.battery is not None,
         is_on_fn=lambda x: x.settings.battery.bypass if x.settings.battery else None,
         set_fn=lambda client, on: client.battery_bypass(on=on),
+    ),
+    ElgatoSwitchEntityDescription(
+        key="energy_saving",
+        translation_key="energy_saving",
+        icon="mdi:leaf",
+        entity_category=EntityCategory.CONFIG,
+        has_fn=lambda x: x.battery is not None,
+        is_on_fn=lambda x: (
+            x.settings.battery.energy_saving.enabled if x.settings.battery else None
+        ),
+        set_fn=lambda client, on: client.energy_saving(on=on),
     ),
 ]
 

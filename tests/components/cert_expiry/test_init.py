@@ -74,7 +74,7 @@ async def test_update_unique_id(hass: HomeAssistant) -> None:
 
 
 @patch("homeassistant.util.dt.utcnow", return_value=static_datetime())
-async def test_unload_config_entry(mock_now, hass):
+async def test_unload_config_entry(mock_now, hass: HomeAssistant) -> None:
     """Test unloading a config entry."""
     assert hass.state is CoreState.running
 
@@ -99,7 +99,7 @@ async def test_unload_config_entry(mock_now, hass):
         await hass.async_block_till_done()
 
     assert entry.state is ConfigEntryState.LOADED
-    state = hass.states.get("sensor.cert_expiry_timestamp_example_com")
+    state = hass.states.get("sensor.example_com_cert_expiry")
     assert state.state == timestamp.isoformat()
     assert state.attributes.get("error") == "None"
     assert state.attributes.get("is_valid")
@@ -107,12 +107,12 @@ async def test_unload_config_entry(mock_now, hass):
     await hass.config_entries.async_unload(entry.entry_id)
 
     assert entry.state is ConfigEntryState.NOT_LOADED
-    state = hass.states.get("sensor.cert_expiry_timestamp_example_com")
+    state = hass.states.get("sensor.example_com_cert_expiry")
     assert state.state == STATE_UNAVAILABLE
 
     await hass.config_entries.async_remove(entry.entry_id)
     await hass.async_block_till_done()
-    state = hass.states.get("sensor.cert_expiry_timestamp_example_com")
+    state = hass.states.get("sensor.example_com_cert_expiry")
     assert state is None
 
 
@@ -129,7 +129,7 @@ async def test_delay_load_during_startup(hass: HomeAssistant) -> None:
     assert hass.state is CoreState.not_running
     assert entry.state is ConfigEntryState.LOADED
 
-    state = hass.states.get("sensor.cert_expiry_timestamp_example_com")
+    state = hass.states.get("sensor.example_com_cert_expiry")
     assert state is None
 
     timestamp = future_timestamp(100)
@@ -142,7 +142,7 @@ async def test_delay_load_during_startup(hass: HomeAssistant) -> None:
 
     assert hass.state is CoreState.running
 
-    state = hass.states.get("sensor.cert_expiry_timestamp_example_com")
+    state = hass.states.get("sensor.example_com_cert_expiry")
     assert state.state == timestamp.isoformat()
     assert state.attributes.get("error") == "None"
     assert state.attributes.get("is_valid")

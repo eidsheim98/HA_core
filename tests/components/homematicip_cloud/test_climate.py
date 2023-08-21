@@ -36,7 +36,9 @@ async def test_manually_configured_platform(hass: HomeAssistant) -> None:
     assert not hass.data.get(HMIPC_DOMAIN)
 
 
-async def test_hmip_heating_group_heat(hass, default_mock_hap_factory):
+async def test_hmip_heating_group_heat(
+    hass: HomeAssistant, default_mock_hap_factory
+) -> None:
     """Test HomematicipHeatingGroup."""
     entity_id = "climate.badezimmer"
     entity_name = "Badezimmer"
@@ -57,7 +59,12 @@ async def test_hmip_heating_group_heat(hass, default_mock_hap_factory):
     assert ha_state.attributes["temperature"] == 5.0
     assert ha_state.attributes["current_humidity"] == 47
     assert ha_state.attributes[ATTR_PRESET_MODE] == "STD"
-    assert ha_state.attributes[ATTR_PRESET_MODES] == [PRESET_BOOST, "STD", "Winter"]
+    assert ha_state.attributes[ATTR_PRESET_MODES] == [
+        PRESET_BOOST,
+        PRESET_ECO,
+        "STD",
+        "Winter",
+    ]
 
     service_call_counter = len(hmip_device.mock_calls)
 
@@ -217,6 +224,21 @@ async def test_hmip_heating_group_heat(hass, default_mock_hap_factory):
     # Only fire event from last async_manipulate_test_data available.
     assert hmip_device.mock_calls[-1][0] == "fire_update_event"
 
+    assert ha_state.state == HVACMode.AUTO
+    await hass.services.async_call(
+        "climate",
+        "set_preset_mode",
+        {"entity_id": entity_id, "preset_mode": PRESET_ECO},
+        blocking=True,
+    )
+    assert len(hmip_device.mock_calls) == service_call_counter + 25
+    assert hmip_device.mock_calls[-1][0] == "set_control_mode"
+    assert hmip_device.mock_calls[-1][1] == ("ECO",)
+    await async_manipulate_test_data(hass, hmip_device, "controlMode", "ECO")
+    ha_state = hass.states.get(entity_id)
+    assert ha_state.attributes[ATTR_PRESET_MODE] == PRESET_ECO
+    assert ha_state.state == HVACMode.AUTO
+
     await async_manipulate_test_data(hass, hmip_device, "floorHeatingMode", "RADIATOR")
     await async_manipulate_test_data(hass, hmip_device, "valvePosition", 0.1)
     ha_state = hass.states.get(entity_id)
@@ -229,7 +251,9 @@ async def test_hmip_heating_group_heat(hass, default_mock_hap_factory):
     assert ha_state.attributes[ATTR_HVAC_ACTION] == HVACAction.IDLE
 
 
-async def test_hmip_heating_group_cool(hass, default_mock_hap_factory):
+async def test_hmip_heating_group_cool(
+    hass: HomeAssistant, default_mock_hap_factory
+) -> None:
     """Test HomematicipHeatingGroup."""
     entity_id = "climate.badezimmer"
     entity_name = "Badezimmer"
@@ -349,7 +373,9 @@ async def test_hmip_heating_group_cool(hass, default_mock_hap_factory):
     assert hmip_device.mock_calls[-1][1] == (4,)
 
 
-async def test_hmip_heating_group_heat_with_switch(hass, default_mock_hap_factory):
+async def test_hmip_heating_group_heat_with_switch(
+    hass: HomeAssistant, default_mock_hap_factory
+) -> None:
     """Test HomematicipHeatingGroup."""
     entity_id = "climate.schlafzimmer"
     entity_name = "Schlafzimmer"
@@ -370,10 +396,17 @@ async def test_hmip_heating_group_heat_with_switch(hass, default_mock_hap_factor
     assert ha_state.attributes["temperature"] == 5.0
     assert ha_state.attributes["current_humidity"] == 43
     assert ha_state.attributes[ATTR_PRESET_MODE] == "STD"
-    assert ha_state.attributes[ATTR_PRESET_MODES] == [PRESET_BOOST, "STD", "P2"]
+    assert ha_state.attributes[ATTR_PRESET_MODES] == [
+        PRESET_BOOST,
+        PRESET_ECO,
+        "STD",
+        "P2",
+    ]
 
 
-async def test_hmip_heating_group_heat_with_radiator(hass, default_mock_hap_factory):
+async def test_hmip_heating_group_heat_with_radiator(
+    hass: HomeAssistant, default_mock_hap_factory
+) -> None:
     """Test HomematicipHeatingGroup."""
     entity_id = "climate.vorzimmer"
     entity_name = "Vorzimmer"
@@ -393,10 +426,16 @@ async def test_hmip_heating_group_heat_with_radiator(hass, default_mock_hap_fact
     assert ha_state.attributes["max_temp"] == 30.0
     assert ha_state.attributes["temperature"] == 5.0
     assert ha_state.attributes[ATTR_PRESET_MODE] is None
-    assert ha_state.attributes[ATTR_PRESET_MODES] == [PRESET_NONE, PRESET_BOOST]
+    assert ha_state.attributes[ATTR_PRESET_MODES] == [
+        PRESET_NONE,
+        PRESET_BOOST,
+        PRESET_ECO,
+    ]
 
 
-async def test_hmip_climate_services(hass, mock_hap_with_service):
+async def test_hmip_climate_services(
+    hass: HomeAssistant, mock_hap_with_service
+) -> None:
     """Test HomematicipHeatingGroup."""
 
     home = mock_hap_with_service.home
@@ -508,7 +547,9 @@ async def test_hmip_climate_services(hass, mock_hap_with_service):
     assert len(home._connection.mock_calls) == 10
 
 
-async def test_hmip_heating_group_services(hass, default_mock_hap_factory):
+async def test_hmip_heating_group_services(
+    hass: HomeAssistant, default_mock_hap_factory
+) -> None:
     """Test HomematicipHeatingGroup services."""
     entity_id = "climate.badezimmer"
     entity_name = "Badezimmer"

@@ -1,4 +1,5 @@
 """Tests for the AndroidTV config flow."""
+from typing import Any
 from unittest.mock import patch
 
 import pytest
@@ -47,14 +48,14 @@ INVALID_MAC = "ff:ff:ff:ff:ff:ff"
 HOST = "127.0.0.1"
 VALID_DETECT_RULE = [{"paused": {"media_session_state": 3}}]
 
-# Android TV device with Python ADB implementation
+# Android device with Python ADB implementation
 CONFIG_PYTHON_ADB = {
     CONF_HOST: HOST,
     CONF_PORT: DEFAULT_PORT,
     CONF_DEVICE_CLASS: DEVICE_ANDROIDTV,
 }
 
-# Android TV device with ADB server
+# Android device with ADB server
 CONFIG_ADB_SERVER = {
     CONF_HOST: HOST,
     CONF_PORT: DEFAULT_PORT,
@@ -69,7 +70,7 @@ CONNECT_METHOD = (
 
 
 class MockConfigDevice:
-    """Mock class to emulate Android TV device."""
+    """Mock class to emulate Android device."""
 
     def __init__(self, eth_mac=ETH_MAC, wifi_mac=None):
         """Initialize a fake device to test config flow."""
@@ -82,7 +83,7 @@ class MockConfigDevice:
 
 
 @pytest.mark.parametrize(
-    ["config", "eth_mac", "wifi_mac"],
+    ("config", "eth_mac", "wifi_mac"),
     [
         (CONFIG_PYTHON_ADB, ETH_MAC, None),
         (CONFIG_ADB_SERVER, ETH_MAC, None),
@@ -92,7 +93,12 @@ class MockConfigDevice:
         (CONFIG_ADB_SERVER, ETH_MAC, WIFI_MAC),
     ],
 )
-async def test_user(hass, config, eth_mac, wifi_mac):
+async def test_user(
+    hass: HomeAssistant,
+    config: dict[str, Any],
+    eth_mac: str | None,
+    wifi_mac: str | None,
+) -> None:
     """Test user config."""
     flow_result = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": SOURCE_USER, "show_advanced_options": True}
@@ -196,7 +202,7 @@ async def test_error_invalid_key(hass: HomeAssistant) -> None:
 
 
 @pytest.mark.parametrize(
-    ["config", "eth_mac", "wifi_mac"],
+    ("config", "eth_mac", "wifi_mac"),
     [
         (CONFIG_ADB_SERVER, None, None),
         (CONFIG_PYTHON_ADB, None, None),
@@ -206,7 +212,12 @@ async def test_error_invalid_key(hass: HomeAssistant) -> None:
         (CONFIG_PYTHON_ADB, None, INVALID_MAC),
     ],
 )
-async def test_invalid_mac(hass, config, eth_mac, wifi_mac):
+async def test_invalid_mac(
+    hass: HomeAssistant,
+    config: dict[str, Any],
+    eth_mac: str | None,
+    wifi_mac: str | None,
+) -> None:
     """Test for invalid mac address."""
     with patch(
         CONNECT_METHOD,

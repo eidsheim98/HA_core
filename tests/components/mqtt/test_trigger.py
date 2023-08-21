@@ -9,7 +9,11 @@ from homeassistant.core import HomeAssistant
 from homeassistant.setup import async_setup_component
 
 from tests.common import async_fire_mqtt_message, async_mock_service, mock_component
-from tests.components.blueprint.conftest import stub_blueprint_populate  # noqa: F401
+
+
+@pytest.fixture(autouse=True, name="stub_blueprint_populate")
+def stub_blueprint_populate_autouse(stub_blueprint_populate: None) -> None:
+    """Stub copying the blueprints to the config folder."""
 
 
 @pytest.fixture
@@ -26,10 +30,10 @@ def no_platforms():
 
 
 @pytest.fixture(autouse=True)
-async def setup_comp(hass: HomeAssistant, mqtt_mock_entry_no_yaml_config):
+async def setup_comp(hass: HomeAssistant, mqtt_mock_entry):
     """Initialize components."""
     mock_component(hass, "group")
-    return await mqtt_mock_entry_no_yaml_config()
+    return await mqtt_mock_entry()
 
 
 async def test_if_fires_on_topic_match(hass: HomeAssistant, calls) -> None:
@@ -180,7 +184,9 @@ async def test_if_fires_on_payload_template(hass: HomeAssistant, calls) -> None:
     assert len(calls) == 1
 
 
-async def test_non_allowed_templates(hass: HomeAssistant, calls, caplog) -> None:
+async def test_non_allowed_templates(
+    hass: HomeAssistant, calls, caplog: pytest.LogCaptureFixture
+) -> None:
     """Test non allowed function in template."""
     assert await async_setup_component(
         hass,
